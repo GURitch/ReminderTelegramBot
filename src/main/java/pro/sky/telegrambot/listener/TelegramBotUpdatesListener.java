@@ -6,6 +6,7 @@ import com.pengrad.telegrambot.model.Update;
 import com.pengrad.telegrambot.request.SendMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import pro.sky.telegrambot.model.NotificationTask;
 import pro.sky.telegrambot.repository.NotificationTaskRepository;
@@ -13,6 +14,7 @@ import pro.sky.telegrambot.repository.NotificationTaskRepository;
 import javax.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -39,15 +41,6 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
         telegramBot.setUpdatesListener(this);
     }
 
-    private void sendMessage(long chatId, String messageText) {
-        SendMessage message = new SendMessage(chatId, messageText);
-        try {
-            telegramBot.execute(message);
-        } catch (Exception e) {
-            logger.error("Error sending message", e);
-        }
-    }
-
     @Override
     public int process(List<Update> updates) {
         updates.forEach(update -> {
@@ -70,9 +63,48 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
         return UpdatesListener.CONFIRMED_UPDATES_ALL;
     }
 
+    public void processReminderMessages(Update update) {
+
+        Matcher matcher = REMINDER_PATTERN.matcher(update.message().text());
+        long chatId = update.message().chat().id();
+
+        if (!matcher.matches()) {
+            sendMessage(chatId, "Для создания напоминания используйте корректный формат сообщения: \"дд.мм.гггг чч:мм Напоминание\"\n(прим. 01.01.2022 20:00 Сделать домашнюю работу)");
+            return;
+        }
+
+        String dateTimeString = matcher.group(1);
+        LocalDateTime dateTime = LocalDateTime.parse(dateTimeString, DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+
+        if (dateTime.isBefore(LocalDateTime.now())) {
+            sendMessage(chatId, "Извините, нельзя создать напоминание для прошедшего времени, проверьте дату/время");
+            return;
+        }
+
+        String reminderText = matcher.group(3);
+
+        if (notificationTaskRepository.existsByNotificationDateAndNotificationText(dateTime, reminderText)) {
+            sendMessage(chatId, "Это напоминание уже существует");
+            return;
+        }
+
+        NotificationTask notificationTask = new NotificationTask(chatId, reminderText, dateTime);
+        notificationTaskRepository.save(notificationTask);
+        sendMessage(chatId, "Напоминание успешно создано!\n" + dateTimeString + " я напомню вам " + reminderText);
+    }
+
+    private void sendMessage(long chatId, String messageText) {
+        SendMessage message = new SendMessage(chatId, messageText);
+        try {
+            telegramBot.execute(message);
+        } catch (Exception e) {
+            logger.error("Error sending message", e);
+        }
+    }
+
     public void getAllRemindersMessage(long chatId) {
         List<NotificationTask> tasks = notificationTaskRepository.findAll();
-        if(tasks.isEmpty()){
+        if (tasks.isEmpty()) {
             sendMessage(chatId, "Напоминаний нет");
             return;
         }
@@ -89,36 +121,17 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
                     .append(task.getNotificationText())
                     .append("\n\n");
         }
-        sendMessage(chatId,messageBuilder.toString());
+        sendMessage(chatId, messageBuilder.toString());
     }
+    @Scheduled(cron = "0 * * * * *")
+    public void sendReminderNotifications() {
+        LocalDateTime currentMinute = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
 
-    public void processReminderMessages(Update update) {
+        List<NotificationTask> remindersToSend = notificationTaskRepository.findByNotificationDate(currentMinute);
 
-            Matcher matcher = REMINDER_PATTERN.matcher(update.message().text());
-            long chatId = update.message().chat().id();
-
-            if (!matcher.matches()) {
-                sendMessage(chatId, "Для создания напоминания используйте корректный формат сообщения: \"дд.мм.гггг чч:мм Напоминание\"\n(прим. 01.01.2022 20:00 Сделать домашнюю работу)");
-                return;
-            }
-
-            String dateTimeString = matcher.group(1);
-            LocalDateTime dateTime = LocalDateTime.parse(dateTimeString, DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
-
-            if (dateTime.isBefore(LocalDateTime.now())) {
-                sendMessage(chatId, "Извините, нельзя создать напоминание для прошедшего времени, проверьте дату/время");
-                return;
-            }
-
-            String reminderText = matcher.group(3);
-
-            if (notificationTaskRepository.existsByNotificationDateAndNotificationText(dateTime, reminderText)) {
-                sendMessage(chatId, "Это напоминание уже существует");
-                return;
-            }
-
-            NotificationTask notificationTask = new NotificationTask(chatId, reminderText, dateTime);
-            notificationTaskRepository.save(notificationTask);
-            sendMessage(chatId, "Напоминание успешно сознано!\n"+dateTimeString + " я напомню вам " + reminderText);
+        for (NotificationTask reminder : remindersToSend) {
+            sendMessage(reminder.getChatId(),"НАПОМИНАНИЕ!!!\n " + reminder.getNotificationText());
+            notificationTaskRepository.delete(reminder);
+        }
     }
 }
