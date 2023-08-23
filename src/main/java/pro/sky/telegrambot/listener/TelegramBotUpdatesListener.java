@@ -53,7 +53,14 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
             long chatId = update.message().chat().id();
 
             if (update.message() != null && "/start".equals(update.message().text())) {
-                sendMessage(chatId, "Добро пожаловать!");
+                sendMessage(chatId, """
+                        Добро пожаловать!
+
+                        Здесь вы можете создать напоминание, для этого отправьте сообщение в формате: "дд.мм.гггг чч:мм Текст напоминания"
+                        (прим. 01.01.2022 20:00 Сделать домашнюю работу)
+
+                        /reminders - активные напоминания""");
+
             } else if (update.message() != null && "/reminders".equals(update.message().text())) {
                 getAllRemindersMessage(chatId);
             } else if (update.message() != null && update.message().text() != null) {
@@ -123,6 +130,7 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
         }
         sendMessage(chatId, messageBuilder.toString());
     }
+
     @Scheduled(cron = "0 * * * * *")
     public void sendReminderNotifications() {
         LocalDateTime currentMinute = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
@@ -130,7 +138,7 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
         List<NotificationTask> remindersToSend = notificationTaskRepository.findByNotificationDate(currentMinute);
 
         for (NotificationTask reminder : remindersToSend) {
-            sendMessage(reminder.getChatId(),"НАПОМИНАНИЕ!!!\n " + reminder.getNotificationText());
+            sendMessage(reminder.getChatId(), "НАПОМИНАНИЕ!!!\n " + reminder.getNotificationText());
             notificationTaskRepository.delete(reminder);
         }
     }
