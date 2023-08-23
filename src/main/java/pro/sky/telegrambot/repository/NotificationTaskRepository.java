@@ -11,4 +11,5 @@ import java.util.List;
 public interface NotificationTaskRepository extends JpaRepository<NotificationTask, Long> {
     boolean existsByNotificationDateAndNotificationText(LocalDateTime dateTime, String reminderText);
     List<NotificationTask> findByNotificationDate(LocalDateTime notificationDate);
+    List<NotificationTask> findAllByChatId(Long chatID);
 }

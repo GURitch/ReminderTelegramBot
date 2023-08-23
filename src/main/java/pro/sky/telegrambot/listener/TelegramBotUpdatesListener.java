@@ -103,7 +103,7 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
     }
 
     public void getAllRemindersMessage(long chatId) {
-        List<NotificationTask> tasks = notificationTaskRepository.findAll();
+        List<NotificationTask> tasks = notificationTaskRepository.findAllByChatId(chatId);
         if (tasks.isEmpty()) {
             sendMessage(chatId, "Напоминаний нет");
             return;
