@@ -45,6 +45,7 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
     public int process(List<Update> updates) {
         updates.forEach(update -> {
             logger.info("Processing update: {}", update);
+            String updateMessageText = update.message().text();
 
             if (update.message() == null) {
                 return;
@@ -52,7 +53,7 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
 
             long chatId = update.message().chat().id();
 
-            if (update.message() != null && "/start".equals(update.message().text())) {
+            if (update.message() != null && "/start".equals(updateMessageText)) {
                 sendMessage(chatId, """
                         Добро пожаловать!
 
@@ -63,7 +64,7 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
 
                         /reminders - активные напоминания""");
 
-            } else if (update.message() != null && "/reminders".equals(update.message().text())) {
+            } else if (update.message() != null && "/reminders".equals(updateMessageText)) {
                 getAllRemindersMessage(chatId);
             } else if (update.message() != null && update.message().text() != null) {
                 processReminderMessages(update);
@@ -74,7 +75,8 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
 
     public void processReminderMessages(Update update) {
 
-        Matcher matcher = REMINDER_PATTERN.matcher(update.message().text());
+        String updateMessageText = update.message().text();
+        Matcher matcher = REMINDER_PATTERN.matcher(updateMessageText);
         long chatId = update.message().chat().id();
 
         if (!matcher.matches()) {
